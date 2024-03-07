@@ -74,6 +74,15 @@ public class PipelineTests
         PipelineOutcome actual = sut.Process(aValidContext with { Age = 90 });
         actual.Sentence.Contains("not so young").Should().BeTrue();
     }
+    
+    [Fact]
+    public void ReportAllErrors()
+    {
+        PipelineOutcome actual = sut.Process(aValidContext with { LastName="p", Age = -11 });
+        actual.IsValid.Should().BeFalse();
+        actual.Errors.Should().HaveCount(2);
+    }
+
 
     private static readonly PipelineContext aValidContext = new("Agatino", "Pesce", 52);
 }

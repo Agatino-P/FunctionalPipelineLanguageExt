@@ -9,7 +9,7 @@ public class Pipeline
     {
         return ToEither(pipelineContext)
             .Bind(ValidateFirstName)
-            .Bind(CheckLastName)
+            .Map(CheckLastName)
             .Map(LowerFirstName)
             .Map(UpperLastName)
             .Bind(ValidateAge)
@@ -17,35 +17,31 @@ public class Pipeline
             .Match<PipelineOutcome>(CreateSuccessOutcome, CreateFailureOutcome);
     }
 
-    public Either<List<string>, PipelineContext> ToEither(PipelineContext context) 
+    public static Either<List<string>, PipelineContext> ToEither(PipelineContext context) 
         => Either<List<string>, PipelineContext>.Right(context);
 
     public Either<List<string>,PipelineContext> ValidateFirstName(PipelineContext context)
     {
         return string.IsNullOrEmpty(context.FirstName)
-            ? Either<List<string>, PipelineContext>.Left([.. context.History, "Invalid Firstname"])
-            : Either<List<string>, PipelineContext>.Right(context);
+            ? Failure([.. context.History, "Invalid Firstname"])
+            : Success(context);
     }
 
-    public Either<List<string>, PipelineContext> CheckLastName(PipelineContext context)
-    {
-        List<string> newHistory = new(context.History);
-        if (context.LastName.Length <= 2)
-        {
-            newHistory.Add("LastName was really short");
-        }
-        return context with { History = newHistory };
+    public PipelineContext CheckLastName(PipelineContext context) =>
+        context.LastName.Length <= 2
+            ? context with { History = [.. context.History, "LastName was really short"] }
+            : context;
 
-    }
+    public static PipelineContext LowerFirstName(PipelineContext context) => 
+        context with { FirstName = context.FirstName.ToLower() };
+    public static PipelineContext UpperLastName(PipelineContext context) =>
+        context with { LastName = context.LastName.ToUpper() };
 
-    public static PipelineContext LowerFirstName(PipelineContext context) => context with { FirstName = context.FirstName.ToLower() };
-    public static PipelineContext UpperLastName(PipelineContext context) => context with { LastName = context.LastName.ToUpper() };
-
-    public Either<List<string>, PipelineContext> ValidateAge(PipelineContext context)
+    public static Either<List<string>, PipelineContext> ValidateAge(PipelineContext context)
     {
         return context.Age < 0
-            ? Either<List<string>, PipelineContext>.Left([.. context.History, "Age lkess than zero"])
-            : Either<List<string>, PipelineContext>.Right(context);
+            ? Failure([.. context.History, "Age is less than zero"])
+            : Success(context);
     }
 
     public static PipelineContext DetermineAgeRange(PipelineContext context) =>
@@ -56,11 +52,11 @@ public class Pipeline
         Dictionary<AgeRange, string> AgeFeelings = new(){
             { AgeRange.Undefined, "confused"},
             { AgeRange.Young, "still young"},
-               { AgeRange.Old, "not so young"},
+            { AgeRange.Old, "not so young"},
         };
 
-        StringBuilder sentence = new StringBuilder(context.FirstName);
-        sentence.Append(' ')
+        StringBuilder sentence = new StringBuilder(context.FirstName)
+            .Append(' ')
             .Append(context.LastName)
             .Append(" is feeling ")
             .Append(AgeFeelings[context.AgeRange]);
@@ -70,5 +66,10 @@ public class Pipeline
     {
         return new PipelineOutcome(false, "", history);
     }
+
+    private static Either<List<string>, PipelineContext> Success(PipelineContext context)
+        => Either<List<string>, PipelineContext>.Right(context);
+    private static Either<List<string>, PipelineContext> Failure(List<string> errors)
+        => Either<List<string>, PipelineContext>.Left(errors);
 
 }
