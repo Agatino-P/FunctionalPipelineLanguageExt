@@ -1,6 +1,6 @@
 ﻿namespace FuncPipeline.Domain;
 
-public enum AgeRange
+internal enum AgeRange
 {
     Undefined,
     Young,

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FuncPipeline.Domain;
+using NSubstitute;
 namespace FuncPipelineTests;
 
 /*Take a Person Class
@@ -16,27 +17,33 @@ In the end return a single outcome with Full name and Comment or list of comment
 
 public class PipelineTests
 {
-
-    private readonly Pipeline sut=new();
+    readonly IFirstNameValidationService fnvs = Substitute.For<IFirstNameValidationService>();
+    private readonly Pipeline sut;
     
+    public PipelineTests()
+    {
+        sut = new(fnvs);
+        fnvs.IsValid(Arg.Any<string>()).Returns(true);
+    }
     [Fact]
     public void AcceptValidContext()
     {
-        PipelineOutcome actual = sut.Process(aValidContext);
+        PipelineOutput actual = sut.Process(aValidInput);
         actual.IsValid.Should().BeTrue();
     }
 
     [Fact]
     public void RejectEmptyFirstName()
     {
-        PipelineOutcome actual = sut.Process(aValidContext with { FirstName=""});
+        fnvs.IsValid(Arg.Any<string>()).Returns(false);
+        PipelineOutput actual = sut.Process(aValidInput with { FirstName=""});
         actual.IsValid.Should().BeFalse();
     }
 
     [Fact]
     public void TrackLastNameLessThanTwoCharacters()
     {
-        PipelineOutcome actual = sut.Process(aValidContext with { LastName = "P" });
+        PipelineOutput actual = sut.Process(aValidInput with { LastName = "P" });
         actual.IsValid.Should().BeTrue();
         actual.Errors.Exists(e => e.Contains("short")).Should().BeTrue();
     }
@@ -44,45 +51,45 @@ public class PipelineTests
     [Fact]
     public void ContainLowercaseFirstNameInSentence()
     {
-        PipelineOutcome actual = sut.Process(aValidContext);
-        actual.Sentence.Contains(aValidContext.FirstName.ToLower()).Should().BeTrue();
+        PipelineOutput actual = sut.Process(aValidInput);
+        actual.Sentence.Contains(aValidInput.FirstName.ToLower()).Should().BeTrue();
     }
 
     [Fact]
     public void ContainUppercaseLastNameInSentence()
     {
-        PipelineOutcome actual = sut.Process(aValidContext);
-        actual.Sentence.Contains(aValidContext.LastName.ToUpper()).Should().BeTrue();
+        PipelineOutput actual = sut.Process(aValidInput);
+        actual.Sentence.Contains(aValidInput.LastName.ToUpper()).Should().BeTrue();
     }
 
     [Fact]
     public void RejectNegativeAge()
     {
-        PipelineOutcome actual = sut.Process(aValidContext with { Age=-12});
+        PipelineOutput actual = sut.Process(aValidInput with { Age=-12});
         actual.IsValid.Should().BeFalse();
     }
 
     [Fact]
     public void CommentOnYoungAge()
     {
-        PipelineOutcome actual = sut.Process(aValidContext with { Age=25});
+        PipelineOutput actual = sut.Process(aValidInput with { Age=25});
         actual.Sentence.Contains("still young").Should().BeTrue();
     }
     [Fact]
     public void CommentOnOldAge()
     {
-        PipelineOutcome actual = sut.Process(aValidContext with { Age = 90 });
+        PipelineOutput actual = sut.Process(aValidInput with { Age = 90 });
         actual.Sentence.Contains("not so young").Should().BeTrue();
     }
     
     [Fact]
     public void ReportAllErrors()
     {
-        PipelineOutcome actual = sut.Process(aValidContext with { LastName="p", Age = -11 });
+        PipelineOutput actual = sut.Process(aValidInput with { LastName="p", Age = -11 });
         actual.IsValid.Should().BeFalse();
         actual.Errors.Should().HaveCount(2);
     }
 
 
-    private static readonly PipelineContext aValidContext = new("Agatino", "Pesce", 52);
+    private static readonly PipelineInput aValidInput = new("Agatino", "Pesce", 52);
 }

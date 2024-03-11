@@ -5,49 +5,57 @@ namespace FuncPipeline.Domain;
 
 public class Pipeline
 {
-    public PipelineOutcome Process(PipelineContext pipelineContext)
+    private readonly IFirstNameValidationService firstNameValidationService;
+
+    public Pipeline(IFirstNameValidationService firstNameValidationService)
     {
-        return ToEither(pipelineContext)
-            .Bind(ValidateFirstName)
+        this.firstNameValidationService = firstNameValidationService;
+    }
+    public PipelineOutput Process(PipelineInput input)
+    {
+        return ToEither(input)
+            .Bind((c)=>ValidateFirstName(c, firstNameValidationService))
             .Map(CheckLastName)
             .Map(LowerFirstName)
             .Map(UpperLastName)
             .Bind(ValidateAge)
             .Map(DetermineAgeRange)
-            .Match<PipelineOutcome>(CreateSuccessOutcome, CreateFailureOutcome);
+            .Match<PipelineOutput>(CreateSuccessOutcome, CreateFailureOutcome);
     }
 
-    public static Either<List<string>, PipelineContext> ToEither(PipelineContext context) 
-        => Either<List<string>, PipelineContext>.Right(context);
+    internal static Either<List<string>, PipelineContext> ToEither(PipelineInput input)
+        => Either<List<string>, PipelineContext>.Right(new PipelineContext(input));
 
-    public Either<List<string>,PipelineContext> ValidateFirstName(PipelineContext context)
+    internal Either<List<string>,PipelineContext> ValidateFirstName(        
+        PipelineContext context, IFirstNameValidationService firstNameValidationService)
     {
-        return string.IsNullOrEmpty(context.FirstName)
-            ? Failure([.. context.History, "Invalid Firstname"])
-            : Success(context);
+        return firstNameValidationService.IsValid(context.FirstName)
+            ? Success(context)
+            : Failure([.. context.History, "Invalid Firstname"]);
+            
     }
 
-    public PipelineContext CheckLastName(PipelineContext context) =>
+    internal PipelineContext CheckLastName(PipelineContext context) =>
         context.LastName.Length <= 2
             ? context with { History = [.. context.History, "LastName was really short"] }
             : context;
 
-    public static PipelineContext LowerFirstName(PipelineContext context) => 
+    internal static PipelineContext LowerFirstName(PipelineContext context) => 
         context with { FirstName = context.FirstName.ToLower() };
-    public static PipelineContext UpperLastName(PipelineContext context) =>
+    internal static PipelineContext UpperLastName(PipelineContext context) =>
         context with { LastName = context.LastName.ToUpper() };
 
-    public static Either<List<string>, PipelineContext> ValidateAge(PipelineContext context)
+    internal static Either<List<string>, PipelineContext> ValidateAge(PipelineContext context)
     {
         return context.Age < 0
             ? Failure([.. context.History, "Age is less than zero"])
             : Success(context);
     }
 
-    public static PipelineContext DetermineAgeRange(PipelineContext context) =>
+    internal static PipelineContext DetermineAgeRange(PipelineContext context) =>
         context with { AgeRange = context.Age < 50 ? AgeRange.Young : AgeRange.Old };
 
-    private static PipelineOutcome CreateSuccessOutcome(PipelineContext context)
+    private static PipelineOutput CreateSuccessOutcome(PipelineContext context)
     {
         Dictionary<AgeRange, string> AgeFeelings = new(){
             { AgeRange.Undefined, "confused"},
@@ -60,11 +68,11 @@ public class Pipeline
             .Append(context.LastName)
             .Append(" is feeling ")
             .Append(AgeFeelings[context.AgeRange]);
-        return new PipelineOutcome(true, sentence.ToString(), context.History);
+        return new PipelineOutput(true, sentence.ToString(), context.History);
     }
-    private static PipelineOutcome CreateFailureOutcome(List<string> history)
+    private static PipelineOutput CreateFailureOutcome(List<string> history)
     {
-        return new PipelineOutcome(false, "", history);
+        return new PipelineOutput(false, "", history);
     }
 
     private static Either<List<string>, PipelineContext> Success(PipelineContext context)
